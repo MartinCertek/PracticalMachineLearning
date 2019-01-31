@@ -1,0 +1,114 @@
+---
+title: "Predictions using the Weight Lifting Exercises Dataset"
+author: "Martin Certek"
+date: "2.1.2019"
+output: 
+  html_document:
+    keep_md: yes
+  md_document:
+    variant: markdown_github
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Introduction
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it.
+
+In this project, we will use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants to predict the manner in which they did the exercise.
+
+## Load libraries
+```{r cars}
+library(caret)
+library(rpart)
+library(rpart.plot)
+library(randomForest)
+library(corrplot)
+```
+
+## Load Data
+```{r}
+setwd("C:\\Users\\user\\Downloads\\R-data")
+trainfn = "pml-training.csv"
+testfn = "pml-testing.csv"
+trainDf <- read.csv(trainfn, sep=",", header=TRUE, na.strings = c("NA","",'#DIV/0!'))
+testDf <- read.csv(testfn, sep=",", header=TRUE, na.strings = c("NA","",'#DIV/0!'))
+```
+```{r}
+dim(trainDf)
+```
+
+```{r}
+dim(testDf)
+```
+### Clean the data
+Clean data
+```{r}
+trainDf <- trainDf[, colSums(is.na(trainDf)) == 0]
+testDf <- testDf[, colSums(is.na(testDf)) == 0]
+
+classe <- trainDf$classe
+trainRemove <- grepl("^X|timestamp|window", names(trainDf))
+trainDf <- trainDf[, !trainRemove]
+trainCleaned <- trainDf[, sapply(trainDf, is.numeric)]
+trainCleaned$classe <- classe
+testRemove <- grepl("^X|timestamp|window", names(testDf))
+testDf <- testDf[, !testRemove]
+testCleaned <- testDf[, sapply(testDf, is.numeric)]
+
+```
+### Split  data 
+Split cleaned data set into training data sate (70%) and validation data set (30%)
+```{r}
+set.seed(22519) # For reproducibile purpose
+inTrain <- createDataPartition(trainCleaned$classe, p=0.70, list=F)
+trainData <- trainCleaned[inTrain, ]
+testData <- trainCleaned[-inTrain, ]
+```
+
+## Modeling the data
+First we fit predictive model using Random Forest (rf), using selection of important variables.
+As parameter we use 5-fold cross validation with algorithm
+
+```{r}
+controlRf <- trainControl(method="cv", 5)
+modelRf <- train(classe ~ ., data=trainData, method="rf", trControl=controlRf, ntree=250)
+modelRf
+
+```
+
+We check model on validation set
+```{r}
+predictRf <- predict(modelRf, testData)
+confusionMatrix(testData$classe, predictRf)
+```
+
+### Visualization of decission tree
+```{r pressure, echo=FALSE}
+treeModel <- rpart(classe ~ ., data=trainData, method="class")
+prp(treeModel) # fast plot
+```
+
+
+```{r}
+accuracy <- postResample(predictRf, testData$classe)
+accuracy
+```
+Estimated out-of-sample error
+```{r}
+err <- 1 - as.numeric(confusionMatrix(testData$classe, predictRf)$overall[1])
+err
+```
+
+## Apply model on testing data
+
+```{r}
+result <- predict(modelRf, testCleaned[, -length(names(testCleaned))])
+result
+```
+
+
+
+
